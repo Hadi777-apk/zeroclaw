@@ -47,4 +47,7 @@ ignore = [
     # (Tauri) was removed in PR #8544.
     "RUSTSEC-2026-0173",  # proc-macro-error2 unmaintained; transitive macro helper; tracking #8519
     "RUSTSEC-2024-0388",  # derivative unmaintained; transitive derive helper; tracking #8519
+    "RUSTSEC-2026-0253",  # direct lru usages are upgraded to >=0.18.2; lru 0.16.4 remains only as a transitive dependency of nostr-sdk 0.44; tracking #8519
+    "RUSTSEC-2025-0167",  # bitmaps 3.2.1 has no fix for its unsound byte conversions; transitive via matrix-sdk 0.18 -> imbl; awaiting a maintained upstream replacement; tracking #8519
+    "RUSTSEC-2026-0247",  # bitmaps is unmaintained in all versions; transitive via matrix-sdk 0.18 -> imbl; awaiting a maintained upstream replacement; tracking #8519
 ]

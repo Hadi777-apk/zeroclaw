@@ -57,7 +57,6 @@ jobs:
           # Avoid opening a duplicate while an advisory issue is still open.
           open_count=$(gh issue list \
             --repo "$GITHUB_REPOSITORY" \
-            --label "security" \
             --state open \
             --search "Advisory scan failed in:title" \
             --json number \
@@ -80,11 +79,34 @@ jobs:
             printf 'cc @JordanTheJet @Audacity88\n'
           } > /tmp/issue-body.md
 
+          # Labels are useful metadata, but a missing label must not prevent
+          # the advisory issue from being created. Create missing labels when
+          # possible and omit any label that cannot be provisioned.
+          issue_labels=()
+          ensure_label() {
+            local label="$1"
+            local color="$2"
+            local description="$3"
+            local encoded_label="${label//:/%3A}"
+
+            if gh api --silent "repos/$GITHUB_REPOSITORY/labels/$encoded_label" >/dev/null 2>&1 ||
+              gh label create "$label" \
+                --repo "$GITHUB_REPOSITORY" \
+                --color "$color" \
+                --description "$description" >/dev/null; then
+              issue_labels+=(--label "$label")
+            else
+              echo "::warning::Label '$label' is unavailable; creating the advisory issue without it."
+            fi
+          }
+
+          ensure_label "security" "b60205" "Security-related issue"
+          ensure_label "risk:high" "d73a4a" "High-risk issue"
+
           issue_url=$(gh issue create \
             --repo "$GITHUB_REPOSITORY" \
             --title "ci: Advisory scan failed — $(date -u +%Y-%m-%d)" \
-            --label "security" \
-            --label "risk:high" \
+            "${issue_labels[@]}" \
             --body-file /tmp/issue-body.md)
           echo "issue_url=$issue_url" >> "$GITHUB_OUTPUT"
 

@@ -17,7 +17,6 @@ enum NostrProtocol {
 /// Replies use the same protocol the sender used. Unsolicited sends default to NIP-17.
 pub struct NostrChannel {
     client: Client,
-    keys: Keys,
     public_key: PublicKey,
     /// The alias key under `[channels.nostr.<alias>]` this handle is
     /// bound to. Used to scope peer-group writes and resolver lookups.
@@ -42,9 +41,7 @@ impl NostrChannel {
         let keys = Keys::parse(private_key).context("Invalid Nostr private key")?;
         let public_key = keys.public_key();
 
-        let client = Client::builder()
-            .authenticator(SignerAuthenticator::new(keys.clone()))
-            .build();
+        let client = Client::builder().signer(keys).build();
         for relay in &relays {
             client
                 .add_relay(relay.as_str())
@@ -55,7 +52,6 @@ impl NostrChannel {
 
         Ok(Self {
             client,
-            keys,
             public_key,
             alias: alias.into(),
             peer_resolver,
@@ -122,12 +118,8 @@ impl Channel for NostrChannel {
         match protocol {
             NostrProtocol::Nip17 => {
                 // NIP-17: gift-wrapped private message
-                let event = PrivateDirectMessageBuilder::new(recipient, message.content.clone())
-                    .finalize(&self.keys)
-                    .context("Failed to build NIP-17 message")?;
                 self.client
-                    .send_event(&event)
-                    .broadcast()
+                    .send_private_msg(recipient, &message.content, None)
                     .await
                     .context("Failed to send NIP-17 message")?;
                 ::zeroclaw_log::record!(
@@ -141,18 +133,15 @@ impl Channel for NostrChannel {
             }
             NostrProtocol::Nip04 => {
                 // NIP-04: legacy encrypted DM (kind 4)
-                let encrypted = self
-                    .keys
+                let signer = self.client.signer().await.context("No signer on client")?;
+                let encrypted = signer
                     .nip04_encrypt(&recipient, &message.content)
+                    .await
                     .context("NIP-04 encryption failed")?;
                 let builder = EventBuilder::new(Kind::EncryptedDirectMessage, encrypted)
                     .tag(Tag::public_key(recipient));
-                let event = builder
-                    .finalize(&self.keys)
-                    .context("Failed to build NIP-04 message")?;
                 self.client
-                    .send_event(&event)
-                    .broadcast()
+                    .send_event_builder(builder)
                     .await
                     .context("Failed to send NIP-04 message")?;
                 ::zeroclaw_log::record!(
@@ -182,7 +171,7 @@ impl Channel for NostrChannel {
             .limit(10);
 
         self.client
-            .subscribe(filter)
+            .subscribe(filter, None)
             .await
             .context("Failed to subscribe to Nostr events")?;
 
@@ -196,16 +185,18 @@ impl Channel for NostrChannel {
         );
 
         let sender_protocols = Arc::clone(&self.sender_protocols);
-        let mut notifications = self.client.notifications();
+        let signer = self.client.signer().await.context("No signer on client")?;
 
         loop {
-            let notification = notifications
-                .next()
+            let notification = self
+                .client
+                .notifications()
+                .recv()
                 .await
-                .context("Notification stream closed")?;
+                .context("Notification channel closed")?;
 
             match notification {
-                ClientNotification::Event { event, .. } => {
+                RelayPoolNotification::Event { event, .. } => {
                     let result = match event.kind {
                         Kind::EncryptedDirectMessage => {
                             // NIP-04: created_at is the real timestamp (no jitter)
@@ -227,7 +218,7 @@ impl Channel for NostrChannel {
                                 );
                                 continue;
                             }
-                            match self.keys.nip04_decrypt(&event.pubkey, &event.content) {
+                            match signer.nip04_decrypt(&event.pubkey, &event.content).await {
                                 Ok(content) => {
                                     let sender = event.pubkey;
                                     sender_protocols
@@ -261,7 +252,7 @@ impl Channel for NostrChannel {
                         Kind::GiftWrap => {
                             // NIP-17: unwrap first, then check the rumor's created_at
                             // (the outer gift-wrap timestamp is jittered for privacy)
-                            match UnwrappedGift::from_gift_wrap(&self.keys, event.as_ref()) {
+                            match self.client.unwrap_gift_wrap(&event).await {
                                 Ok(unwrapped) => {
                                     let rumor = unwrapped.rumor;
                                     if rumor.created_at < listen_start {
@@ -343,7 +334,7 @@ impl Channel for NostrChannel {
                         }
                     }
                 }
-                ClientNotification::Shutdown => {
+                RelayPoolNotification::Shutdown => {
                     ::zeroclaw_log::record!(
                         INFO,
                         ::zeroclaw_log::Event::new(module_path!(), ::zeroclaw_log::Action::Note),
@@ -351,7 +342,7 @@ impl Channel for NostrChannel {
                     );
                     break;
                 }
-                ClientNotification::Message { .. } => {}
+                RelayPoolNotification::Message { .. } => {}
             }
         }
 

@@ -68,6 +68,7 @@ ignore = [
     # RUSTSEC-2024-0370 (proc-macro-error) was dropped when zeroclaw-desktop
     # (Tauri) was removed in PR #8544.
     { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2 unmaintained; transitive macro helper; tracking #8519" },
+    { id = "RUSTSEC-2026-0253", reason = "direct lru usages are upgraded to >=0.18.2; lru 0.16.4 remains only as a transitive dependency of nostr-sdk 0.44, whose 0.45 API migration is not a drop-in change; tracking #8519" },
     { id = "RUSTSEC-2026-0247", reason = "bitmaps 3.1.0 remains unmaintained; transitive via matrix-sdk 0.18 -> imbl; no compatible maintained replacement is available until matrix-sdk migrates; tracking #8519" },
     { id = "RUSTSEC-2024-0388", reason = "derivative unmaintained; transitive derive helper; tracking #8519" },
 ]
@@ -289,6 +290,13 @@ version = "=0.51.0"
 [[bans.skip]]
 name = "io-lifetimes"
 version = "=2.0.4"
+
+# lru 0.16.4 remains transitively required by nostr-sdk 0.44; direct
+# application caches use lru >=0.18.2. Remove this skip with the nostr-sdk 0.45
+# API migration tracked above.
+[[bans.skip]]
+name = "lru"
+version = "=0.16.4"
 
 [[bans.skip]]
 name = "windows-sys"

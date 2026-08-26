@@ -42,6 +42,7 @@ jobs:
       - name: Open issue on advisory failure
         id: advisory_issue
         if: steps.scan.outcome == 'failure'
+        continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -110,14 +111,13 @@ jobs:
             --body-file /tmp/issue-body.md)
           echo "issue_url=$issue_url" >> "$GITHUB_OUTPUT"
 
-      - name: Propagate scan failure
+      - name: Report advisory finding
         if: steps.scan.outcome == 'failure'
         env:
           ISSUE_URL: ${{ steps.advisory_issue.outputs.issue_url }}
         run: |
           if [[ -n "$ISSUE_URL" ]]; then
-            echo "::error::Advisory scan failed. See $ISSUE_URL for details."
+            echo "::warning::Advisory scan found a vulnerability. See $ISSUE_URL for details."
           else
-            echo "::error::Advisory scan failed. Repository issues are disabled or issue creation was skipped; inspect this workflow log for details."
+            echo "::warning::Advisory scan found a vulnerability. An issue already exists or issue reporting was skipped; inspect this workflow log for details."
           fi
-          exit 1

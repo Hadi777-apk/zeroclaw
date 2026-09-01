@@ -47,6 +47,7 @@ ignore = [
     # precondition cannot occur; no patched 45.x release exists, remediation
     # is the wasmtime 46.0.2+/47.0.3+ series bump
     { id = "RUSTSEC-2026-0222", reason = "wasmtime Store type-index confusion between engines; single-Engine plugin runtime is not exposed; no patched 45.x, remediation is the 46/47 bump; tracking #8519" },
+    { id = "RUSTSEC-2026-0269", reason = "wasmtime WASI filesystem trailing-slash sandbox escape; WASM plugins are opt-in and default builds exclude wasmtime; no patched 45.x, upgrade to 46+ tracked #8519" },
     # GTK3 stack unmaintained via zeroclaw-desktop (tauri -> webkit2gtk); tracking #8519.
     { id = "RUSTSEC-2024-0411", reason = "gdkwayland-sys unmaintained gtk-rs GTK3 bindings; tracking #8519" },
     { id = "RUSTSEC-2024-0412", reason = "gdk unmaintained gtk-rs GTK3 bindings; tracking #8519" },

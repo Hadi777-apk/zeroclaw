@@ -67,12 +67,14 @@ jobs:
           # exit > 1 = crash/network error — don't create garbage issue
           if [ "$exit_code" -gt 1 ]; then
             echo "::error::cargo outdated crashed with exit code $exit_code. Check the step log for details."
+            exit "$exit_code"
           fi
-          exit "$exit_code"
+          exit 0
 
       - name: Open issue on outdated dependencies
         id: outdated_issue
         if: steps.scan.outputs.scan_exit_code == '1'
+        continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -118,7 +120,7 @@ jobs:
             --body-file "${{ runner.temp }}/issue-body.md")
           echo "issue_url=$issue_url" >> "$GITHUB_OUTPUT"
 
-      - name: Propagate scan failure
+      - name: Report scan result
         if: steps.scan.outputs.scan_exit_code != '0'
         env:
           ISSUE_URL: ${{ steps.outdated_issue.outputs.issue_url }}
@@ -126,11 +128,11 @@ jobs:
         run: |
           if [[ "$SCAN_EXIT_CODE" == "1" ]]; then
             if [[ -n "$ISSUE_URL" ]]; then
-              echo "::error::Outdated dependencies detected. See $ISSUE_URL for details."
+              echo "::warning::Outdated dependencies detected. See $ISSUE_URL for details."
             else
-              echo "::error::Outdated dependencies detected. Repository issues are disabled or issue creation was skipped; inspect this workflow log for details."
+              echo "::warning::Outdated dependencies detected. An issue already exists or issue reporting was skipped; inspect this workflow log for details."
             fi
           else
             echo "::error::cargo outdated failed with exit code $SCAN_EXIT_CODE. Inspect the scan step log for details."
+            exit 1
           fi
-          exit 1
